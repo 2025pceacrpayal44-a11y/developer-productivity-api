@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Developer Productivity API
 
 A REST API for managing users, projects, and tasks for the Developer Productivity Dashboard.
