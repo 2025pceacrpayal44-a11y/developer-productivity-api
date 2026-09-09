@@ -1,3 +1,4 @@
+const db = require("./db");
 const errorHandler = require("./middleware/errorHandler");
 const taskRoutes = require("./routes/taskRoutes");
 const projectRoutes = require("./routes/projectRoutes");
@@ -22,6 +23,19 @@ app.get("/", (req, res) => {
     success: true,
     message: "Developer Productivity API is running",
   });
+});
+app.get("/api/db-test", async (req, res, next) => {
+  try {
+    const [rows] = await db.query("SELECT 1 AS connected");
+
+    res.json({
+      success: true,
+      message: "MySQL database connected successfully",
+      data: rows,
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.use(errorHandler);

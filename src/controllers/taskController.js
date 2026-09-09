@@ -1,167 +1,308 @@
-const tasks = require("../data/tasks");
+const db = require("../db");
 
-const validStatuses = ["todo", "in-progress", "done"];
+// GET all tasks
+const getTasks = async (req, res, next) => {
+  try {
+    const [tasks] = await db.query(`
+      SELECT
+        t.id,
+        t.title,
+        t.description,
+        t.status,
+        t.priority,
+        t.project_id,
+        p.name AS project_name,
+        t.user_id,
+        u.name AS assigned_to,
+        t.due_date,
+        t.created_at
+      FROM tasks t
+      JOIN projects p ON t.project_id = p.id
+      JOIN users u ON t.user_id = u.id
+      ORDER BY t.id
+    `);
 
-const getTasks = (req, res) => {
-  res.status(200).json({
-    success: true,
-    data: tasks,
-  });
+    res.status(200).json({
+      success: true,
+      data: tasks,
+    });
+  } catch (error) {
+    next(error);
+  }
 };
 
-const getTaskById = (req, res) => {
-  const task = tasks.find(
-    (task) => task.id === Number(req.params.id)
-  );
+// GET task by ID
+const getTaskById = async (req, res, next) => {
+  try {
+    const [tasks] = await db.query(
+      `
+      SELECT
+        t.id,
+        t.title,
+        t.description,
+        t.status,
+        t.priority,
+        t.project_id,
+        p.name AS project_name,
+        t.user_id,
+        u.name AS assigned_to,
+        t.due_date,
+        t.created_at
+      FROM tasks t
+      JOIN projects p ON t.project_id = p.id
+      JOIN users u ON t.user_id = u.id
+      WHERE t.id = ?
+      `,
+      [req.params.id]
+    );
 
-  if (!task) {
-    return res.status(404).json({
-      success: false,
-      message: "Task not found",
+    if (tasks.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Task not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: tasks[0],
     });
+  } catch (error) {
+    next(error);
   }
-
-  res.status(200).json({
-    success: true,
-    data: task,
-  });
 };
 
-const createTask = (req, res) => {
-  const {
-    title,
-    description,
-    status,
-    priority,
-    projectId,
-    userId,
-  } = req.body;
+// CREATE task
+const createTask = async (req, res, next) => {
+  try {
+    const {
+      title,
+      description,
+      status,
+      priority,
+      project_id,
+      user_id,
+      due_date,
+    } = req.body;
 
-  if (!title || !description || !status || !priority || !projectId || !userId) {
-    return res.status(400).json({
-      success: false,
-      message:
-        "Title, description, status, priority, projectId and userId are required",
+    if (!title || !project_id || !user_id) {
+      return res.status(400).json({
+        success: false,
+        message: "Title, project_id and user_id are required",
+      });
+    }
+
+    const [result] = await db.query(
+      `
+      INSERT INTO tasks
+      (title, description, status, priority, project_id, user_id, due_date)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        title,
+        description || null,
+        status || "todo",
+        priority || "medium",
+        project_id,
+        user_id,
+        due_date || null,
+      ]
+    );
+
+    const [tasks] = await db.query(
+      `
+      SELECT
+        t.id,
+        t.title,
+        t.description,
+        t.status,
+        t.priority,
+        t.project_id,
+        p.name AS project_name,
+        t.user_id,
+        u.name AS assigned_to,
+        t.due_date,
+        t.created_at
+      FROM tasks t
+      JOIN projects p ON t.project_id = p.id
+      JOIN users u ON t.user_id = u.id
+      WHERE t.id = ?
+      `,
+      [result.insertId]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "Task created successfully",
+      data: tasks[0],
     });
+  } catch (error) {
+    next(error);
   }
-
-  if (!validStatuses.includes(status)) {
-    return res.status(400).json({
-      success: false,
-      message: "Status must be todo, in-progress or done",
-    });
-  }
-
-  const newTask = {
-    id: tasks.length + 1,
-    title,
-    description,
-    status,
-    priority,
-    projectId: Number(projectId),
-    userId: Number(userId),
-  };
-
-  tasks.push(newTask);
-
-  res.status(201).json({
-    success: true,
-    message: "Task created successfully",
-    data: newTask,
-  });
 };
 
-const updateTask = (req, res) => {
-  const task = tasks.find(
-    (task) => task.id === Number(req.params.id)
-  );
+// UPDATE task
+const updateTask = async (req, res, next) => {
+  try {
+    const {
+      title,
+      description,
+      status,
+      priority,
+      project_id,
+      user_id,
+      due_date,
+    } = req.body;
 
-  if (!task) {
-    return res.status(404).json({
-      success: false,
-      message: "Task not found",
+    if (!title || !project_id || !user_id) {
+      return res.status(400).json({
+        success: false,
+        message: "Title, project_id and user_id are required",
+      });
+    }
+
+    const [result] = await db.query(
+      `
+      UPDATE tasks
+      SET
+        title = ?,
+        description = ?,
+        status = ?,
+        priority = ?,
+        project_id = ?,
+        user_id = ?,
+        due_date = ?
+      WHERE id = ?
+      `,
+      [
+        title,
+        description || null,
+        status || "todo",
+        priority || "medium",
+        project_id,
+        user_id,
+        due_date || null,
+        req.params.id,
+      ]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Task not found",
+      });
+    }
+
+    const [tasks] = await db.query(
+      `
+      SELECT
+        t.id,
+        t.title,
+        t.description,
+        t.status,
+        t.priority,
+        t.project_id,
+        p.name AS project_name,
+        t.user_id,
+        u.name AS assigned_to,
+        t.due_date,
+        t.created_at
+      FROM tasks t
+      JOIN projects p ON t.project_id = p.id
+      JOIN users u ON t.user_id = u.id
+      WHERE t.id = ?
+      `,
+      [req.params.id]
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Task updated successfully",
+      data: tasks[0],
     });
+  } catch (error) {
+    next(error);
   }
-
-  const {
-    title,
-    description,
-    status,
-    priority,
-    projectId,
-    userId,
-  } = req.body;
-
-  if (status && !validStatuses.includes(status)) {
-    return res.status(400).json({
-      success: false,
-      message: "Status must be todo, in-progress or done",
-    });
-  }
-
-  if (title !== undefined) task.title = title;
-  if (description !== undefined) task.description = description;
-  if (status !== undefined) task.status = status;
-  if (priority !== undefined) task.priority = priority;
-  if (projectId !== undefined) task.projectId = Number(projectId);
-  if (userId !== undefined) task.userId = Number(userId);
-
-  res.status(200).json({
-    success: true,
-    message: "Task updated successfully",
-    data: task,
-  });
 };
 
-const deleteTask = (req, res) => {
-  const taskIndex = tasks.findIndex(
-    (task) => task.id === Number(req.params.id)
-  );
+// UPDATE task status
+const updateTaskStatus = async (req, res, next) => {
+  try {
+    const { status } = req.body;
 
-  if (taskIndex === -1) {
-    return res.status(404).json({
-      success: false,
-      message: "Task not found",
+    if (!["todo", "in-progress", "done"].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Status must be todo, in-progress or done",
+      });
+    }
+
+    const [result] = await db.query(
+      "UPDATE tasks SET status = ? WHERE id = ?",
+      [status, req.params.id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Task not found",
+      });
+    }
+
+    const [tasks] = await db.query(
+      `
+      SELECT
+        t.id,
+        t.title,
+        t.description,
+        t.status,
+        t.priority,
+        t.project_id,
+        p.name AS project_name,
+        t.user_id,
+        u.name AS assigned_to,
+        t.due_date,
+        t.created_at
+      FROM tasks t
+      JOIN projects p ON t.project_id = p.id
+      JOIN users u ON t.user_id = u.id
+      WHERE t.id = ?
+      `,
+      [req.params.id]
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Task status updated successfully",
+      data: tasks[0],
     });
+  } catch (error) {
+    next(error);
   }
-
-  const deletedTask = tasks.splice(taskIndex, 1);
-
-  res.status(200).json({
-    success: true,
-    message: "Task deleted successfully",
-    data: deletedTask[0],
-  });
 };
 
-const updateTaskStatus = (req, res) => {
-  const task = tasks.find(
-    (task) => task.id === Number(req.params.id)
-  );
+// DELETE task
+const deleteTask = async (req, res, next) => {
+  try {
+    const [result] = await db.query(
+      "DELETE FROM tasks WHERE id = ?",
+      [req.params.id]
+    );
 
-  if (!task) {
-    return res.status(404).json({
-      success: false,
-      message: "Task not found",
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Task not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Task deleted successfully",
     });
+  } catch (error) {
+    next(error);
   }
-
-  const { status } = req.body;
-
-  if (!status || !validStatuses.includes(status)) {
-    return res.status(400).json({
-      success: false,
-      message: "Status must be todo, in-progress or done",
-    });
-  }
-
-  task.status = status;
-
-  res.status(200).json({
-    success: true,
-    message: "Task status updated successfully",
-    data: task,
-  });
 };
 
 module.exports = {
@@ -169,6 +310,6 @@ module.exports = {
   getTaskById,
   createTask,
   updateTask,
-  deleteTask,
   updateTaskStatus,
+  deleteTask,
 };
